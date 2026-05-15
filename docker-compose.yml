@@ -1,0 +1,34 @@
+services:
+  backend:
+    build: ./backend
+    container_name: sandha-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - sandha-data:/data
+      - ./backend/app:/app/app
+    environment:
+      - DATABASE_URL=sqlite:////data/sandha.db
+      - SECRET_KEY=${SECRET_KEY:-your-super-secret-key-change-in-production}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=60
+    networks:
+      - sandha-network
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: sandha-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - sandha-network
+    restart: unless-stopped
+
+volumes:
+  sandha-data:
+
+networks:
+  sandha-network:
+    driver: bridge
