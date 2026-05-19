@@ -1,47 +1,61 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text, ForeignKey, Boolean, Enum
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.orm import relationship
-from app.database import Base
-import enum
+from datetime import datetime
 
-class UserRole(str, enum.Enum):
-    ADMIN = "admin"
-    STAFF = "staff"
-    MEMBER = "member"
+# Import Base from database.py to ensure all models use the same metadata
+from .database import Base
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=True)
+    full_name = Column(String, nullable=True)
+    hashed_password = Column(String)
+    role = Column(String, default="staff")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+    last_login = Column(DateTime, nullable=True)
 
 class Member(Base):
     __tablename__ = "members"
 
-    memno = Column(String, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True)
+    memno = Column(String, unique=True, index=True)
     full_name = Column(String, nullable=False)
     id_number = Column(String, nullable=True)
-    mobile_number = Column(String)
-    whatsapp_number = Column(String)
-    permanent_address = Column(Text)
-    date_of_birth = Column(Date)
-    civil_status = Column(String)
-    occupation = Column(String)
-    residence_type = Column(String)
-    owner_name = Column(String)
-    owner_mobile = Column(String)
+    mobile_number = Column(String, nullable=True)
+    whatsapp_number = Column(String, nullable=True)
+    permanent_address = Column(Text, nullable=True)
+    date_of_birth = Column(Date, nullable=True)
+    civil_status = Column(String, default="Single")
+    occupation = Column(String, nullable=True)
+    residence_type = Column(String, nullable=False)
+    owner_name = Column(String, nullable=True)
+    owner_mobile = Column(String, nullable=True)
     sandha_amount = Column(Float, default=300.0)
-    paying_other_masjid = Column(String, default="No")
-    other_masjid_details = Column(Text)
     meal_contribution = Column(String, default="No")
-    special_needs = Column(Text)
+    meal_contribution_amount = Column(Float, default=0.0)
+    paying_other_masjid = Column(String, default="No")
+    other_masjid_details = Column(String, nullable=True)
+    special_needs = Column(String, nullable=True)
+    is_sub_member = Column(String, default="No")
+    parent_memno = Column(String, nullable=True)
     no_of_children = Column(Integer, default=0)
     children_above_18 = Column(Integer, default=0)
     total_family_members = Column(Integer, default=1)
     has_non_related = Column(String, default="No")
-    created_at = Column(DateTime)
-    updated_at = Column(DateTime)
+    photo_url = Column(String, nullable=True)
+    qr_code_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
-    children = relationship("MemberChild", back_populates="member")
-    non_related = relationship("NonRelatedResident", back_populates="member")
-    sandha_payments = relationship("SandhaPayment", back_populates="member")
-    meal_contributions = relationship("MealContribution", back_populates="member")
-    # donations relationship removed - Donation.donor_id is not a ForeignKey
-    zakath_donations = relationship("ZakathDonation", back_populates="member")
-    remarks = relationship("MemberRemark", back_populates="member")
+    children = relationship("MemberChild", back_populates="member", cascade="all, delete-orphan")
+    non_related = relationship("NonRelatedResident", back_populates="member", cascade="all, delete-orphan")
+    sandha_payments = relationship("SandhaPayment", back_populates="member", cascade="all, delete-orphan")
+    meal_contributions = relationship("MealContribution", back_populates="member", cascade="all, delete-orphan")
+    remarks = relationship("MemberRemark", back_populates="member", cascade="all, delete-orphan")
 
 class MemberChild(Base):
     __tablename__ = "member_children"
@@ -49,13 +63,13 @@ class MemberChild(Base):
     id = Column(Integer, primary_key=True, index=True)
     memno = Column(String, ForeignKey("members.memno"))
     name = Column(String, nullable=False)
-    date_of_birth = Column(Date)
-    relationship_type = Column(String)
-    school_name = Column(String)
-    grade = Column(String)
-    quran_madrasa = Column(String)
-    occupation = Column(String)
-    contact_number = Column(String)
+    date_of_birth = Column(Date, nullable=True)
+    relationship_type = Column(String, nullable=True)
+    school_name = Column(String, nullable=True)
+    grade = Column(String, nullable=True)
+    quran_madrasa = Column(String, nullable=True)
+    occupation = Column(String, nullable=True)
+    contact_number = Column(String, nullable=True)
 
     member = relationship("Member", back_populates="children")
 
@@ -65,35 +79,24 @@ class NonRelatedResident(Base):
     id = Column(Integer, primary_key=True, index=True)
     memno = Column(String, ForeignKey("members.memno"))
     name = Column(String, nullable=False)
-    id_card = Column(String)
-    address = Column(Text)
-    purpose = Column(Text)
+    id_card = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    purpose = Column(String, nullable=True)
 
     member = relationship("Member", back_populates="non_related")
-
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    full_name = Column(String)
-    role = Column(Enum(UserRole), default=UserRole.STAFF)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime)
-    last_login = Column(DateTime)
 
 class SandhaPayment(Base):
     __tablename__ = "sandha_payments"
 
     id = Column(Integer, primary_key=True, index=True)
     memno = Column(String, ForeignKey("members.memno"))
-    month = Column(Date, nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
     amount = Column(Float, nullable=False)
-    paid_on = Column(Date)
-    receipt_no = Column(String)
-    recorded_by = Column(String)
+    paid_on = Column(Date, nullable=True)
+    payment_mode = Column(String, default="Partial")
+    receipt_no = Column(String, nullable=True)
+    recorded_by = Column(String, nullable=True)
 
     member = relationship("Member", back_populates="sandha_payments")
 
@@ -102,10 +105,13 @@ class MealContribution(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     memno = Column(String, ForeignKey("members.memno"))
-    month = Column(Date, nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
     amount = Column(Float, nullable=False)
-    paid_on = Column(Date)
-    recorded_by = Column(String)
+    paid_on = Column(Date, nullable=True)
+    payment_mode = Column(String, default="Partial")
+    receipt_no = Column(String, nullable=True)
+    recorded_by = Column(String, nullable=True)
 
     member = relationship("Member", back_populates="meal_contributions")
 
@@ -113,57 +119,50 @@ class Donation(Base):
     __tablename__ = "donations"
 
     id = Column(Integer, primary_key=True, index=True)
-    donor_type = Column(String)  # Member or NonMember
-    donor_id = Column(String)    # memno or name
+    donor_type = Column(String, nullable=False)
+    donor_id = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
-    reason = Column(String)
-    dated = Column(Date)
-    recorded_by = Column(String)
-
-    # member relationship removed - donor_id is not a ForeignKey (can be non-member)
+    reason = Column(String, nullable=True)
+    dated = Column(Date, nullable=True)
+    recorded_by = Column(String, nullable=True)
 
 class ZakathDonation(Base):
     __tablename__ = "zakath_donations"
 
     id = Column(Integer, primary_key=True, index=True)
-    donor_memno = Column(String, ForeignKey("members.memno"))
+    donor_memno = Column(String, nullable=False)
     year = Column(Integer, nullable=False)
     amount = Column(Float, nullable=False)
-    dated = Column(Date)
-    recorded_by = Column(String)
-
-    member = relationship("Member", back_populates="zakath_donations")
-    beneficiaries = relationship("ZakathBeneficiary", back_populates="zakath")
+    dated = Column(Date, nullable=True)
+    recorded_by = Column(String, nullable=True)
 
 class ZakathBeneficiary(Base):
     __tablename__ = "zakath_beneficiaries"
 
     id = Column(Integer, primary_key=True, index=True)
     zakath_id = Column(Integer, ForeignKey("zakath_donations.id"))
-    memno = Column(String, ForeignKey("members.memno"))
-    amount = Column(Float)
-    pay_type = Column(String)  # OneTime or Monthly
+    memno = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    pay_type = Column(String, nullable=False)
     months = Column(Integer, default=1)
-    start_month = Column(Date)
-    end_month = Column(Date)
+    start_month = Column(Date, nullable=True)
+    end_month = Column(Date, nullable=True)
     is_closed = Column(Boolean, default=False)
-
-    zakath = relationship("ZakathDonation", back_populates="beneficiaries")
 
 class Staff(Base):
     __tablename__ = "staff"
 
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(String, nullable=False)
-    id_card = Column(String)
-    address = Column(Text)
-    mobile = Column(String)
-    date_of_birth = Column(Date)
-    date_of_joining = Column(Date)
-    job_category = Column(String)
-    basic_salary = Column(Float)
-    incentive = Column(Float)
-    bonus = Column(Float)
+    id_card = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    mobile = Column(String, nullable=True)
+    date_of_birth = Column(Date, nullable=True)
+    date_of_joining = Column(Date, nullable=True)
+    job_category = Column(String, nullable=True)
+    basic_salary = Column(Float, nullable=True)
+    incentive = Column(Float, nullable=True)
+    bonus = Column(Float, nullable=True)
     is_active = Column(Boolean, default=True)
 
 class TempWorker(Base):
@@ -171,41 +170,29 @@ class TempWorker(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    task = Column(String)
-    days = Column(Float)
-    wage_per_day = Column(Float)
-    total = Column(Float)
-    worked_on = Column(Date)
-    recorded_by = Column(String)
+    task = Column(String, nullable=True)
+    days = Column(Float, nullable=True)
+    wage_per_day = Column(Float, nullable=True)
+    total = Column(Float, nullable=True)
+    worked_on = Column(Date, nullable=True)
+    recorded_by = Column(String, nullable=True)
 
 class OfficeBearer(Base):
     __tablename__ = "office_bearers"
 
     id = Column(Integer, primary_key=True, index=True)
-    post = Column(String, unique=True)
-    memno = Column(String, ForeignKey("members.memno"))
-    year_from = Column(Date)
-    year_to = Column(Date)
+    post = Column(String, nullable=False)
+    memno = Column(String, nullable=False)
+    year_from = Column(Date, nullable=True)
+    year_to = Column(Date, nullable=True)
 
 class MemberRemark(Base):
     __tablename__ = "member_remarks"
 
     id = Column(Integer, primary_key=True, index=True)
     memno = Column(String, ForeignKey("members.memno"))
-    remark = Column(Text)
-    added_by = Column(String)
-    added_on = Column(Date)
+    remark = Column(Text, nullable=False)
+    added_on = Column(Date, default=datetime.now)
+    added_by = Column(String, nullable=True)
 
     member = relationship("Member", back_populates="remarks")
-
-class AuditLog(Base):
-    __tablename__ = "audit_logs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    table_name = Column(String)
-    row_id = Column(String)
-    action = Column(String)
-    old_value = Column(Text)
-    new_value = Column(Text)
-    changed_by = Column(String)
-    changed_on = Column(DateTime)

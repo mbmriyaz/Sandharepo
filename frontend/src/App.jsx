@@ -10,7 +10,10 @@ import MemberForm from './pages/MemberForm'
 import MemberDetail from './pages/MemberDetail'
 import Payments from './pages/Payments'
 import Reports from './pages/Reports'
+import MealPayments from './pages/MealPayments'
 import ProtectedRoute from './components/ProtectedRoute'
+import QRScanner from './pages/QRScanner'
+
 
 function App() {
   return (
@@ -28,7 +31,10 @@ function App() {
             <Route path="members/new" element={<MemberForm />} />
             <Route path="members/:memno" element={<MemberDetail />} />
             <Route path="payments" element={<Payments />} />
+            <Route path="payments" element={<Payments />} />
+            <Route path="meal-payments" element={<MealPayments />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="/qr-scanner" element={<ProtectedRoute><QRScanner /></ProtectedRoute>} />
           </Route>
         </Routes>
       </ThemeProvider>

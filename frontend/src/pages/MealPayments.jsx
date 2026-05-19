@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, CreditCard, Calendar, CheckCircle, XCircle } from 'lucide-react'
+import { Search, Utensils, CheckCircle, XCircle } from 'lucide-react'
 import api from '../services/api'
 
 const MONTHS = [
@@ -19,15 +19,12 @@ const SimplePieChart = ({ paid, unpaid }) => {
   return (
     <div className="flex items-center justify-center">
       <svg width="200" height="200" viewBox="0 0 200 200">
-        {/* Background circle (unpaid) */}
         <circle cx="100" cy="100" r="80" fill="none" stroke="#ef4444" strokeWidth="40" 
           strokeDasharray={`${unpaidAngle * 1.396} ${360 * 1.396}`} 
           strokeDashoffset="0" transform="rotate(-90 100 100)" />
-        {/* Paid arc */}
         <circle cx="100" cy="100" r="80" fill="none" stroke="#16a34a" strokeWidth="40" 
           strokeDasharray={`${paidAngle * 1.396} ${360 * 1.396}`} 
           strokeDashoffset={`-${unpaidAngle * 1.396}`} transform="rotate(-90 100 100)" />
-        {/* Center text */}
         <text x="100" y="95" textAnchor="middle" fill="var(--text-primary)" fontSize="14" fontWeight="bold">
           {Math.round((paid / total) * 100)}%
         </text>
@@ -39,9 +36,8 @@ const SimplePieChart = ({ paid, unpaid }) => {
   )
 }
 
-const Payments = () => {
+const MealPayments = () => {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('sandha')
   const [members, setMembers] = useState([])
   const [selectedMember, setSelectedMember] = useState('')
   const [search, setSearch] = useState('')
@@ -59,7 +55,7 @@ const Payments = () => {
     if (selectedMember) {
       fetchSummary()
     }
-  }, [selectedMember, year, activeTab])
+  }, [selectedMember, year])
 
   const fetchMembers = async () => {
     try {
@@ -77,10 +73,7 @@ const Payments = () => {
 
   const fetchSummary = async () => {
     try {
-      const endpoint = activeTab === 'sandha' 
-        ? `/payments/sandha/${selectedMember}/summary?year=${year}`
-        : `/payments/meal/${selectedMember}/summary?year=${year}`
-      const response = await api.get(endpoint)
+      const response = await api.get(`/payments/meal/${selectedMember}/summary?year=${year}`)
       setSummary(response.data)
     } catch (error) {
       console.error('Error fetching summary:', error)
@@ -106,7 +99,13 @@ const Payments = () => {
     setLoading(true)
     try {
       const member = members.find(m => m.memno === selectedMember)
-      const monthlyAmount = activeTab === 'sandha' ? member.sandha_amount : member.meal_amount
+      const monthlyAmount = member.meal_contribution_amount || 0
+
+      if (monthlyAmount === 0) {
+        alert('This member has no meal contribution amount set')
+        setLoading(false)
+        return
+      }
 
       for (const month of selectedMonths) {
         const paymentData = {
@@ -115,17 +114,13 @@ const Payments = () => {
           amount: monthlyAmount,
           paid_on: new Date().toISOString().split('T')[0],
           payment_mode: paymentMode,
-          receipt_no: `${activeTab.toUpperCase()}-${year}-${month}-${selectedMember}`
+          receipt_no: `MEAL-${year}-${month}-${selectedMember}`
         }
 
-        const endpoint = activeTab === 'sandha'
-          ? `/payments/sandha/${selectedMember}`
-          : `/payments/meal/${selectedMember}`
-
-        await api.post(endpoint, paymentData)
+        await api.post(`/payments/meal/${selectedMember}`, paymentData)
       }
 
-      alert(`${activeTab === 'sandha' ? 'Sandha' : 'Meal'} payment recorded for ${selectedMonths.length} months!`)
+      alert(`Meal contribution recorded for ${selectedMonths.length} months!`)
       setSelectedMonths([])
       fetchSummary()
     } catch (error) {
@@ -137,36 +132,7 @@ const Payments = () => {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-8" style={{ color: 'var(--text-primary)' }}>Sandha Payments</h1>
-
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6">
-        {[
-          { id: 'sandha', label: 'Sandha Payment', icon: CreditCard },
-          { id: 'meal', label: 'Meal Contribution', icon: Calendar }
-        ].map((tab) => {
-          const Icon = tab.icon
-          return (
-            <button
-              key={tab.id}
-              onClick={() => { 
-                setActiveTab(tab.id); 
-                setSelectedMember(''); 
-                setSummary(null); 
-                setSelectedMonths([]); 
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                activeTab === tab.id
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-white/5 text-white/70 hover:bg-white/10'
-              }`}
-            >
-              <Icon size={18} />
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
+      <h1 className="text-3xl font-bold mb-8" style={{ color: 'var(--text-primary)' }}>Meal Contribution Payments</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Member Selection */}
@@ -201,7 +167,7 @@ const Payments = () => {
                     </div>
                   </div>
                   <div className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    💰 {activeTab === 'sandha' ? `Sandha: Rs. ${member.sandha_amount}/mo` : `Meal: Rs. ${member.meal_amount}/mo`}
+                    🍽️ Meal: Rs. {member.meal_contribution_amount || 0}/mo
                   </div>
                 </div>
               ))}
@@ -216,7 +182,7 @@ const Payments = () => {
               {/* Summary Card */}
               <div className="glass-card p-6">
                 <h2 className="text-xl font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
-                  {activeTab === 'sandha' ? 'Sandha' : 'Meal'} Summary - {year}
+                  Meal Contribution Summary - {year}
                 </h2>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
@@ -268,7 +234,7 @@ const Payments = () => {
               {/* Payment Form */}
               <div className="glass-card p-6">
                 <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
-                  Record {activeTab === 'sandha' ? 'Sandha' : 'Meal'} Payment
+                  Record Meal Contribution Payment
                 </h3>
 
                 {/* Payment Mode */}
@@ -347,14 +313,14 @@ const Payments = () => {
                   disabled={loading || selectedMonths.length === 0}
                   className="btn-primary w-full"
                 >
-                  {loading ? 'Recording...' : `Record ${activeTab === 'sandha' ? 'Sandha' : 'Meal'} Payment`}
+                  {loading ? 'Recording...' : 'Record Meal Contribution Payment'}
                 </button>
               </div>
             </div>
           ) : (
             <div className="glass-card p-8 text-center" style={{ color: 'var(--text-muted)' }}>
-              <CreditCard size={48} className="mx-auto mb-4 opacity-50" />
-              <p>Select a member to view payment details and record payments</p>
+              <Utensils size={48} className="mx-auto mb-4 opacity-50" />
+              <p>Select a member to view meal contribution details and record payments</p>
             </div>
           )}
         </div>
@@ -363,4 +329,4 @@ const Payments = () => {
   )
 }
 
-export default Payments
+export default MealPayments

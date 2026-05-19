@@ -2,11 +2,13 @@ import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
-import { 
-  LayoutDashboard, 
-  Users, 
-  CreditCard, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Users,
+  CreditCard,
+  Utensils,
+  FileText,
+  ScanLine,
   LogOut,
   Sun,
   Moon
@@ -20,16 +22,18 @@ const Sidebar = () => {
   const menuItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/members', icon: Users, label: 'Members' },
-    { path: '/payments', icon: CreditCard, label: 'Payments' },
+    { path: '/payments', icon: CreditCard, label: 'Sandha Payments' },
+    { path: '/meal-payments', icon: Utensils, label: 'Meal Payments' },
+    { path: '/qr-scanner', icon: ScanLine, label: 'QR Scanner' },
     { path: '/reports', icon: FileText, label: 'Reports' },
   ]
 
   return (
-    <aside 
+    <aside
       className="fixed left-0 top-0 h-full w-64 border-r flex flex-col transition-colors duration-300"
-      style={{ 
-        backgroundColor: 'var(--nav-bg)', 
-        borderColor: 'var(--border-color)' 
+      style={{
+        backgroundColor: 'var(--nav-bg)',
+        borderColor: 'var(--border-color)'
       }}
     >
       <div className="p-6">
@@ -56,7 +60,7 @@ const Sidebar = () => {
 
       <div className="p-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
         {/* Theme Toggle */}
-        <button 
+        <button
           onClick={toggleTheme}
           className="theme-toggle w-full flex items-center gap-3 px-4 py-3 mb-3"
         >

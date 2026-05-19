@@ -1,10 +1,21 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+# Import ALL models BEFORE Base.metadata.create_all()
 from app.database import engine, Base
-from app.routes import auth, members, payments, reports
+from app.models import (
+    User, Member, MemberChild, NonRelatedResident, 
+    SandhaPayment, MealContribution, Donation, 
+    ZakathDonation, ZakathBeneficiary, Staff, 
+    TempWorker, OfficeBearer, MemberRemark
+)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
+
+from app.routes import auth, members, payments, reports
 
 app = FastAPI(
     title="Masjidh Sandha API",
@@ -12,7 +23,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware - allow all origins for development
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,6 +31,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve uploaded files (photos and QR codes)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Include routers
 app.include_router(auth.router, prefix="/api")

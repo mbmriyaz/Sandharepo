@@ -47,10 +47,13 @@ class MemberBase(BaseModel):
     owner_name: Optional[str] = None
     owner_mobile: Optional[str] = None
     sandha_amount: float = 300.0
+    meal_contribution_amount: float = 0.0
     paying_other_masjid: str = "No"
     other_masjid_details: Optional[str] = None
     meal_contribution: str = "No"
     special_needs: Optional[str] = None
+    is_sub_member: str = "No"
+    parent_memno: Optional[str] = None
 
 class MemberCreate(MemberBase):
     pass
@@ -60,6 +63,8 @@ class MemberResponse(MemberBase):
     no_of_children: int = 0
     children_above_18: int = 0
     total_family_members: int = 1
+    is_sub_member: str = "No"
+    parent_memno: Optional[str] = None
     has_non_related: str = "No"
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
@@ -104,9 +109,11 @@ class NonRelatedResidentResponse(NonRelatedResidentBase):
         from_attributes = True
 
 class SandhaPaymentBase(BaseModel):
-    month: date
+    year: int
+    month: int
     amount: float
     paid_on: Optional[date] = None
+    payment_mode: Optional[str] = "Partial"
     receipt_no: Optional[str] = None
 
 class SandhaPaymentCreate(SandhaPaymentBase):
@@ -121,9 +128,12 @@ class SandhaPaymentResponse(SandhaPaymentBase):
         from_attributes = True
 
 class MealContributionBase(BaseModel):
-    month: date
+    year: int
+    month: int
     amount: float
     paid_on: Optional[date] = None
+    payment_mode: Optional[str] = "Partial"
+    receipt_no: Optional[str] = None
 
 class MealContributionCreate(MealContributionBase):
     pass

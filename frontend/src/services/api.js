@@ -21,10 +21,9 @@ api.interceptors.request.use(
   }
 )
 
-// Response interceptor - MUST return response object, not response.data
+// Response interceptor - MUST return response object
 api.interceptors.response.use(
   (response) => {
-    // Return the full response object so response.data is available in .then()
     return response
   },
   (error) => {

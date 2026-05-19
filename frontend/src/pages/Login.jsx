@@ -58,24 +58,24 @@ const Login = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Username</label>
+              <label className="form-label">Username</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="glass-input w-full"
+                className="form-input"
                 placeholder="Enter your username"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Password</label>
+              <label className="form-label">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="glass-input w-full"
+                className="form-input"
                 placeholder="Enter your password"
                 required
               />

@@ -40,16 +40,17 @@ const Dashboard = () => {
       const month = date.getMonth() + 1
 
       const [membersRes, summaryRes] = await Promise.all([
-        api.get('/members/?limit=100'),
+        api.get('/members/'),
         api.get(`/reports/monthly-summary?year=${year}&month=${month}`)
       ])
 
-      let members = membersRes.data || []
-      // Handle JSONResponse wrapper if present
+      // Handle response data properly
+      let members = membersRes.data
       if (members && typeof members === 'object' && !Array.isArray(members)) {
         members = Object.values(members).find(v => Array.isArray(v)) || []
       }
       members = Array.isArray(members) ? members : []
+
       const permanent = members.filter(m => m.memno?.startsWith('PER')).length
       const rented = members.filter(m => m.memno?.startsWith('REN')).length
 
@@ -62,7 +63,6 @@ const Dashboard = () => {
         monthlyMeal: summaryRes.data?.total_meal || 0
       })
 
-      // Get recent members (last 5)
       setRecentMembers(members.slice(0, 5))
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -84,52 +84,15 @@ const Dashboard = () => {
       <h1 className="text-3xl font-bold mb-8" style={{ color: 'var(--text-primary)' }}>Dashboard</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <StatCard
-          title="Total Members"
-          value={stats.totalMembers}
-          icon={Users}
-          color="bg-blue-600"
-          link="/members"
-        />
-        <StatCard
-          title="Permanent Residents"
-          value={stats.permanentResidents}
-          icon={Home}
-          color="bg-green-600"
-          link="/members"
-        />
-        <StatCard
-          title="Rented Residents"
-          value={stats.rentedResidents}
-          icon={UserCheck}
-          color="bg-orange-600"
-          link="/members"
-        />
-        <StatCard
-          title="Monthly Sandha"
-          value={`Rs. ${stats.monthlySandha.toLocaleString()}`}
-          icon={CreditCard}
-          color="bg-purple-600"
-          link="/payments"
-        />
-        <StatCard
-          title="Meal Contributions"
-          value={`Rs. ${stats.monthlyMeal.toLocaleString()}`}
-          icon={Calendar}
-          color="bg-pink-600"
-          link="/payments"
-        />
-        <StatCard
-          title="Total Families"
-          value={stats.totalFamilies}
-          icon={Users}
-          color="bg-teal-600"
-          link="/members"
-        />
+        <StatCard title="Total Members" value={stats.totalMembers} icon={Users} color="bg-blue-600" link="/members" />
+        <StatCard title="Permanent Residents" value={stats.permanentResidents} icon={Home} color="bg-green-600" link="/members" />
+        <StatCard title="Rented Residents" value={stats.rentedResidents} icon={UserCheck} color="bg-orange-600" link="/members" />
+        <StatCard title="Monthly Sandha" value={`Rs. ${stats.monthlySandha.toLocaleString()}`} icon={CreditCard} color="bg-purple-600" link="/payments" />
+        <StatCard title="Meal Contributions" value={`Rs. ${stats.monthlyMeal.toLocaleString()}`} icon={Calendar} color="bg-pink-600" link="/payments" />
+        <StatCard title="Total Families" value={stats.totalFamilies} icon={Users} color="bg-teal-600" link="/members" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Members */}
         <div className="glass-card p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Recent Members</h2>
@@ -137,12 +100,9 @@ const Dashboard = () => {
           </div>
           <div className="space-y-3">
             {recentMembers.length > 0 ? recentMembers.map((member) => (
-              <Link 
-                key={member.memno} 
-                to={`/members/${member.memno}`}
+              <Link key={member.memno} to={`/members/${member.memno}`}
                 className="flex items-center gap-4 p-3 rounded-lg transition-colors hover:opacity-80"
-                style={{ backgroundColor: 'var(--input-bg)' }}
-              >
+                style={{ backgroundColor: 'var(--input-bg)' }}>
                 <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-medium">
                   {member.full_name?.[0] || '?'}
                 </div>
@@ -150,11 +110,7 @@ const Dashboard = () => {
                   <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{member.full_name}</p>
                   <p className="text-xs font-mono text-primary-500">{member.memno}</p>
                 </div>
-                <span className={`px-2 py-1 rounded text-xs ${
-                  member.memno?.startsWith('PER') 
-                    ? 'bg-green-500/20 text-green-500' 
-                    : 'bg-orange-500/20 text-orange-500'
-                }`}>
+                <span className={`px-2 py-1 rounded text-xs ${member.memno?.startsWith('PER') ? 'bg-green-500/20 text-green-500' : 'bg-orange-500/20 text-orange-500'}`}>
                   {member.memno?.startsWith('PER') ? 'PER' : 'REN'}
                 </span>
               </Link>
@@ -164,22 +120,13 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Quick Actions */}
         <div className="glass-card p-6">
           <h2 className="text-xl font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Quick Actions</h2>
           <div className="grid grid-cols-2 gap-4">
-            <Link to="/members/new" className="btn-primary text-center py-3">
-              + Add Member
-            </Link>
-            <Link to="/payments" className="btn-secondary text-center py-3">
-              Record Payment
-            </Link>
-            <Link to="/reports" className="btn-secondary text-center py-3">
-              View Reports
-            </Link>
-            <Link to="/members" className="btn-secondary text-center py-3">
-              Search Members
-            </Link>
+            <Link to="/members/new" className="btn-primary text-center py-3">+ Add Member</Link>
+            <Link to="/payments" className="btn-secondary text-center py-3">Record Payment</Link>
+            <Link to="/reports" className="btn-secondary text-center py-3">View Reports</Link>
+            <Link to="/members" className="btn-secondary text-center py-3">Search Members</Link>
           </div>
         </div>
       </div>

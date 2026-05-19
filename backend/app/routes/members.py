@@ -1,239 +1,228 @@
-from datetime import datetime
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.auth import get_current_active_user, get_admin_user
-from app.models import Member, MemberChild, NonRelatedResident, MemberRemark, User
-from app.schemas import (
-    MemberCreate, MemberResponse, MemberChildCreate, MemberChildResponse,
-    NonRelatedResidentCreate, NonRelatedResidentResponse,
-    MemberRemarkCreate, MemberRemarkResponse
-)
+from sqlalchemy import func
+from typing import Optional, List
+from datetime import datetime, date
+from pydantic import BaseModel
+import os
+import qrcode
+from PIL import Image
+import io
+import shutil
 
-router = APIRouter(prefix="/members", tags=["Members"])
+from ..database import get_db
+from ..models import Member, MemberChild, NonRelatedResident
 
-@router.post("/", response_model=MemberResponse)
-def create_member(
-    member: MemberCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+router = APIRouter(prefix="/members", tags=["members"])
+
+# Create upload directories - LOCAL (not in Docker)
+UPLOAD_DIR = "uploads"
+PHOTO_DIR = os.path.join(UPLOAD_DIR, "member_photos")
+QR_DIR = os.path.join(UPLOAD_DIR, "qr_codes")
+os.makedirs(PHOTO_DIR, exist_ok=True)
+os.makedirs(QR_DIR, exist_ok=True)
+
+class MemberCreate(BaseModel):
+    full_name: str
+    id_number: Optional[str] = None
+    mobile_number: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+    permanent_address: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    civil_status: Optional[str] = "Single"
+    occupation: Optional[str] = None
+    residence_type: str
+    owner_name: Optional[str] = None
+    owner_mobile: Optional[str] = None
+    sandha_amount: Optional[float] = 300.0
+    meal_contribution: Optional[str] = "No"
+    meal_contribution_amount: Optional[float] = 0.0
+    paying_other_masjid: Optional[str] = "No"
+    other_masjid_details: Optional[str] = None
+    special_needs: Optional[str] = None
+    is_sub_member: Optional[str] = "No"
+    parent_memno: Optional[str] = None
+    memno: Optional[str] = None
+    send_whatsapp: Optional[bool] = False
+
+def parse_date(date_str):
+    """Convert string date to Python date object"""
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except:
+        return None
+
+def generate_qr_code(memno, name, output_path):
+    """Generate QR code and save to file"""
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(f"ID:{memno}|NAME:{name}")
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    img.save(output_path)
+    return output_path
+
+@router.get("/")
+def get_members(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    members = db.query(Member).offset(skip).limit(limit).all()
+    return members
+
+@router.post("/")
+async def create_member(
+    full_name: str = Form(...),
+    id_number: Optional[str] = Form(None),
+    mobile_number: Optional[str] = Form(None),
+    whatsapp_number: Optional[str] = Form(None),
+    permanent_address: Optional[str] = Form(None),
+    date_of_birth: Optional[str] = Form(None),
+    civil_status: Optional[str] = Form("Single"),
+    occupation: Optional[str] = Form(None),
+    residence_type: str = Form(...),
+    owner_name: Optional[str] = Form(None),
+    owner_mobile: Optional[str] = Form(None),
+    sandha_amount: Optional[float] = Form(300.0),
+    meal_contribution: Optional[str] = Form("No"),
+    meal_contribution_amount: Optional[float] = Form(0.0),
+    paying_other_masjid: Optional[str] = Form("No"),
+    other_masjid_details: Optional[str] = Form(None),
+    special_needs: Optional[str] = Form(None),
+    is_sub_member: Optional[str] = Form("No"),
+    parent_memno: Optional[str] = Form(None),
+    memno: Optional[str] = Form(None),
+    photo: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
 ):
-    # Generate new member ID with PER/REN prefix based on residence type
-    # For special cases (adding sub-members to existing), use suffix A, B, C...
-    prefix = "PER" if member.residence_type == "Own" else "REN"
+    """Create new member with optional photo upload and auto-generated QR code"""
 
-    # Check if this is a special case (sub-member of existing)
-    # For now, standard sequential numbering
-    last_member = db.query(Member).filter(Member.memno.like(f"{prefix}%")).order_by(Member.memno.desc()).first()
-    if last_member:
-        # Extract numeric part (e.g., "PER00001" -> 1, "PER00001A" -> 1)
-        import re
-        match = re.match(rf"{prefix}(\d+)", last_member.memno)
-        if match:
-            last_num = int(match.group(1))
-            new_id = last_num + 1
+    # Generate memno if not provided
+    if not memno:
+        prefix = "PER" if residence_type == "Own" else "REN"
+        last_member = db.query(Member).filter(Member.memno.like(f"{prefix}%")).order_by(Member.memno.desc()).first()
+        if last_member:
+            try:
+                last_num = int(last_member.memno.replace(prefix, ""))
+                memno = f"{prefix}{str(last_num + 1).zfill(5)}"
+            except:
+                memno = f"{prefix}00001"
         else:
-            new_id = 1
-    else:
-        new_id = 1
+            memno = f"{prefix}00001"
 
-    new_memno = f"{prefix}{new_id:05d}"
+    # Handle sub-member ID generation
+    if is_sub_member == "Yes" and parent_memno:
+        last_sub = db.query(Member).filter(
+            Member.parent_memno == parent_memno,
+            Member.memno.like(f"{parent_memno}%")
+        ).order_by(Member.memno.desc()).first()
 
-    # Check if id_number already exists
-    if member.id_number:
-        existing = db.query(Member).filter(Member.id_number == member.id_number).first()
-        if existing:
-            raise HTTPException(status_code=400, detail=f"Member with ID number {member.id_number} already exists (Member No: {existing.memno})")
+        if last_sub:
+            last_suffix = last_sub.memno.replace(parent_memno, "")
+            if last_suffix and len(last_suffix) == 1:
+                next_char = chr(ord(last_suffix) + 1)
+                memno = f"{parent_memno}{next_char}"
+            else:
+                memno = f"{parent_memno}A"
+        else:
+            memno = f"{parent_memno}A"
 
-    # Calculate total family members (1 for head of household + children)
-    # For now, set to 1 (head of household), will update after adding children
-    member_data = member.dict()
-    member_data['total_family_members'] = 1  # Head of household
+    # Handle photo upload
+    photo_url = None
+    if photo and photo.filename:
+        file_extension = os.path.splitext(photo.filename)[1] or ".jpg"
+        photo_filename = f"{memno}{file_extension}"
+        photo_path = os.path.join(PHOTO_DIR, photo_filename)
 
-    db_member = Member(
-        memno=new_memno,
-        **member_data,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
-    )
+        with open(photo_path, "wb") as buffer:
+            shutil.copyfileobj(photo.file, buffer)
+
+        photo_url = f"/uploads/member_photos/{photo_filename}"
+
+    # Generate QR Code
+    qr_filename = f"qr_{memno}.png"
+    qr_path = os.path.join(QR_DIR, qr_filename)
+    generate_qr_code(memno, full_name, qr_path)
+    qr_code_url = f"/uploads/qr_codes/{qr_filename}"
+
+    # Create member
+    db_member = Member()
+    db_member.memno = memno
+    db_member.full_name = full_name
+    db_member.id_number = id_number
+    db_member.mobile_number = mobile_number
+    db_member.whatsapp_number = whatsapp_number
+    db_member.permanent_address = permanent_address
+    db_member.date_of_birth = parse_date(date_of_birth)
+    db_member.civil_status = civil_status
+    db_member.occupation = occupation
+    db_member.residence_type = residence_type
+    db_member.owner_name = owner_name
+    db_member.owner_mobile = owner_mobile
+    db_member.sandha_amount = sandha_amount
+    db_member.meal_contribution = meal_contribution
+    db_member.meal_contribution_amount = meal_contribution_amount
+    db_member.paying_other_masjid = paying_other_masjid
+    db_member.other_masjid_details = other_masjid_details
+    db_member.special_needs = special_needs
+    db_member.is_sub_member = is_sub_member
+    db_member.parent_memno = parent_memno
+    db_member.no_of_children = 0
+    db_member.children_above_18 = 0
+    db_member.total_family_members = 1
+    db_member.has_non_related = "No"
+    db_member.photo_url = photo_url
+    db_member.qr_code_url = qr_code_url
+    db_member.created_at = datetime.now()
+    db_member.updated_at = datetime.now()
+
     db.add(db_member)
     db.commit()
     db.refresh(db_member)
     return db_member
 
-@router.get("/", response_model=List[MemberResponse])
-def get_members(
-    skip: int = 0,
-    limit: int = 100,
-    search: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    query = db.query(Member)
-    if search:
-        query = query.filter(
-            Member.full_name.contains(search) | 
-            Member.memno.contains(search) |
-            Member.mobile_number.contains(search)
-        )
-    members = query.offset(skip).limit(limit).all()
-    return members
-
-@router.get("/{memno}", response_model=MemberResponse)
-def get_member(
-    memno: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
+@router.get("/{memno}")
+def get_member(memno: str, db: Session = Depends(get_db)):
     member = db.query(Member).filter(Member.memno == memno).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
     return member
 
-@router.put("/{memno}", response_model=MemberResponse)
-def update_member(
-    memno: str,
-    member_update: MemberCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_admin_user)
-):
-    member = db.query(Member).filter(Member.memno == memno).first()
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
+@router.post("/{memno}/children")
+def add_child(memno: str, child_data: dict, db: Session = Depends(get_db)):
+    """Add family member/child - handles date string conversion"""
+    if "date_of_birth" in child_data and child_data["date_of_birth"]:
+        child_data["date_of_birth"] = parse_date(child_data["date_of_birth"])
 
-    for field, value in member_update.dict(exclude_unset=True).items():
-        setattr(member, field, value)
-    member.updated_at = datetime.utcnow()
-
-    db.commit()
-    db.refresh(member)
-    return member
-
-@router.delete("/{memno}")
-def delete_member(
-    memno: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_admin_user)
-):
-    member = db.query(Member).filter(Member.memno == memno).first()
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
-    db.delete(member)
-    db.commit()
-    return {"message": "Member deleted successfully"}
-
-# Children endpoints
-@router.post("/{memno}/children", response_model=MemberChildResponse)
-def add_child(
-    memno: str,
-    child: MemberChildCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    member = db.query(Member).filter(Member.memno == memno).first()
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
-
-    db_child = MemberChild(memno=memno, **child.dict())
+    db_child = MemberChild(
+        memno=memno,
+        name=child_data.get("name"),
+        date_of_birth=child_data.get("date_of_birth"),
+        relationship_type=child_data.get("relationship_type"),
+        school_name=child_data.get("school_name"),
+        grade=child_data.get("grade"),
+        quran_madrasa=child_data.get("quran_madrasa"),
+        occupation=child_data.get("occupation"),
+        contact_number=child_data.get("contact_number")
+    )
     db.add(db_child)
     db.commit()
-
-    # Recalculate counts
-    all_children = db.query(MemberChild).filter(MemberChild.memno == memno).all()
-    member.no_of_children = len(all_children)
-
-    # Calculate children above 18
-    from datetime import date
-    today = date.today()
-    above_18_count = 0
-    for c in all_children:
-        if c.date_of_birth:
-            age = today.year - c.date_of_birth.year
-            if (today.month, today.day) < (c.date_of_birth.month, c.date_of_birth.day):
-                age -= 1
-            if age >= 18:
-                above_18_count += 1
-
-    member.children_above_18 = above_18_count
-
-    # Total family = 1 (head) + children + non-related
-    non_related_count = db.query(NonRelatedResident).filter(NonRelatedResident.memno == memno).count()
-    member.total_family_members = 1 + len(all_children) + non_related_count
-
-    db.commit()
-    db.refresh(db_child)
     return db_child
 
-@router.get("/{memno}/children", response_model=List[MemberChildResponse])
-def get_children(
-    memno: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    return db.query(MemberChild).filter(MemberChild.memno == memno).all()
+@router.get("/{memno}/children")
+def get_children(memno: str, db: Session = Depends(get_db)):
+    """Get all children/family members for a member"""
+    children = db.query(MemberChild).filter(MemberChild.memno == memno).all()
+    return children
 
-# Non-related residents endpoints
-@router.post("/{memno}/non-related", response_model=NonRelatedResidentResponse)
-def add_non_related(
-    memno: str,
-    resident: NonRelatedResidentCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    member = db.query(Member).filter(Member.memno == memno).first()
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
-
-    db_resident = NonRelatedResident(memno=memno, **resident.dict())
-    db.add(db_resident)
-    member.has_non_related = "Yes"
-    db.commit()
-
-    # Recalculate total family members
-    children_count = db.query(MemberChild).filter(MemberChild.memno == memno).count()
-    non_related_count = db.query(NonRelatedResident).filter(NonRelatedResident.memno == memno).count()
-    member.total_family_members = 1 + children_count + non_related_count
-
-    db.commit()
-    db.refresh(db_resident)
-    return db_resident
-
-@router.get("/{memno}/non-related", response_model=List[NonRelatedResidentResponse])
-def get_non_related(
-    memno: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    return db.query(NonRelatedResident).filter(NonRelatedResident.memno == memno).all()
-
-# Remarks endpoints
-@router.post("/{memno}/remarks", response_model=MemberRemarkResponse)
-def add_remark(
-    memno: str,
-    remark: MemberRemarkCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    member = db.query(Member).filter(Member.memno == memno).first()
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
-
-    db_remark = MemberRemark(
+@router.post("/{memno}/non-related")
+def add_non_related(memno: str, resident_data: dict, db: Session = Depends(get_db)):
+    """Add non-related resident"""
+    db_resident = NonRelatedResident(
         memno=memno,
-        remark=remark.remark,
-        added_by=current_user.username,
-        added_on=datetime.utcnow().date()
+        name=resident_data.get("name"),
+        id_card=resident_data.get("id_card"),
+        address=resident_data.get("address"),
+        purpose=resident_data.get("purpose")
     )
-    db.add(db_remark)
+    db.add(db_resident)
     db.commit()
-    db.refresh(db_remark)
-    return db_remark
-
-@router.get("/{memno}/remarks", response_model=List[MemberRemarkResponse])
-def get_remarks(
-    memno: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    return db.query(MemberRemark).filter(MemberRemark.memno == memno).order_by(MemberRemark.added_on.desc()).all()
+    return db_resident

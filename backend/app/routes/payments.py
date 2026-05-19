@@ -27,14 +27,28 @@ def record_sandha(
     service = PaymentService(db)
     return service.record_sandha_payment(memno, payment, current_user.username)
 
-@router.get("/sandha/{memno}", response_model=List[SandhaPaymentResponse])
+@router.get("/sandha/{memno}")
 def get_sandha_history(
     memno: str,
+    year: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     service = PaymentService(db)
-    return service.get_member_sandha_history(memno)
+    return service.get_member_sandha_history(memno, year)
+
+@router.get("/sandha/{memno}/summary")
+def get_sandha_summary(
+    memno: str,
+    year: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    service = PaymentService(db)
+    summary = service.get_member_sandha_summary(memno, year)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return summary
 
 # Meal Contributions
 @router.post("/meal/{memno}", response_model=MealContributionResponse)
@@ -47,14 +61,28 @@ def record_meal(
     service = PaymentService(db)
     return service.record_meal_contribution(memno, contribution, current_user.username)
 
-@router.get("/meal/{memno}", response_model=List[MealContributionResponse])
+@router.get("/meal/{memno}")
 def get_meal_history(
     memno: str,
+    year: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     service = PaymentService(db)
-    return service.get_member_meal_history(memno)
+    return service.get_member_meal_history(memno, year)
+
+@router.get("/meal/{memno}/summary")
+def get_meal_summary(
+    memno: str,
+    year: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    service = PaymentService(db)
+    summary = service.get_member_meal_summary(memno, year)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return summary
 
 # Donations
 @router.post("/donations", response_model=DonationResponse)
@@ -88,7 +116,7 @@ def record_zakath(
     service = PaymentService(db)
     return service.record_zakath_donation(donor_memno, donation, current_user.username)
 
-@router.get("/zakath", response_model=List[ZakathDonationResponse])
+@router.get("/zakath")
 def get_zakath_donations(
     year: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -107,7 +135,7 @@ def add_zakath_beneficiary(
     service = PaymentService(db)
     return service.add_zakath_beneficiary(zakath_id, beneficiary)
 
-@router.get("/zakath/beneficiaries", response_model=List[ZakathBeneficiaryResponse])
+@router.get("/zakath/beneficiaries")
 def get_zakath_beneficiaries(
     zakath_id: Optional[int] = None,
     is_closed: Optional[bool] = None,
